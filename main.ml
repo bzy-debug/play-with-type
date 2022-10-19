@@ -65,6 +65,17 @@ let rec occurs x t =
   | TVar y -> x = y
   | TArr(t1, t2) -> occurs x t1 || occurs x t2
 
+let rec subst t sbt =
+  match t with
+  | TVar x as tx when tx = fst sbt -> snd sbt
+  | TArr(t1, t2) -> TArr(subst t1 sbt, subst t2 sbt)
+  | _ -> t
+
+let subst_pair tp sbt =
+  (subst (fst tp) sbt, subst (snd tp) sbt)
+
+let subst_all constraints sbt = List.map (subst_pair sbt) constraints
+
 let rec unify constraints =
   match constraints with
   | (TInt, TInt)::rest -> unify rest
@@ -73,9 +84,15 @@ let rec unify constraints =
   | (TArr(t1, t2), TArr(t3, t4))::rest ->
       unify ((t1, t3)::(t2, t4)::rest)
   | (TVar x , t)::rest when (not (occurs x t)) ->
-      (TVar x, t)::unify rest
-  | _ -> failwith "unify: not here"
-
+      let sbt = (TVar x, t) in
+      let rest = subst_all rest sbt in
+      sbt::unify rest
+  | (t, TVar x)::rest when (not (occurs x t)) ->
+      let sbt = (TVar x, t) in
+      let rest = subst_all rest sbt in
+      sbt::unify rest
+  | [] -> []
+  | _ -> failwith (string_of_typ_typ_list constraints)
 let test = Fun("f", Fun("x", App(Name "f", App(App(Name "+", Name "x"), Int 1))))
 
 let (aim, constraints) = infer test init_env
